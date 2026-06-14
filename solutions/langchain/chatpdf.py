@@ -71,21 +71,65 @@ async def on_chat_start():
 
 
 async def execute_query(user_query: str):
-    """Streams standard document RAG queries"""
+    """Streams standard document RAG queries, with an automatic internet fallback if not found"""
     chain = cl.user_session.get("chain")
     history = cl.user_session.get("history_logs")
-    if not chain: return
+    if not chain:
+        return
 
     formatted_history = "\n".join(history[-6:]) if history else "No previous history."
+
+    # 1. First, try to get the answer from the PDF context
+    pdf_response_chunks = []
     res = cl.Message(content="")
 
-    async for chunk in chain.astream({"instruction": user_query, "chat_history": formatted_history}):
+    async for chunk in chain.astream({
+        "instruction": user_query,
+        "chat_history": formatted_history
+    }):
+        pdf_response_chunks.append(chunk)
         await res.stream_token(chunk)
 
     await res.send()
-    history.append(f"User: {user_query}")
-    history.append(f"Assistant: {res.content}")
-    cl.user_session.set("history_logs", history)
+    full_pdf_response = "".join(pdf_response_chunks)
+
+    # 2. Check if the LLM failed to find it in the PDF context
+    negative_phrases = ["don't know", "dont know", "not include", "not mentioned", "not found in context", "no information"]
+    if any(phrase in full_pdf_response.lower() for phrase in negative_phrases):
+
+        # Update the UI to let the user know it's pivoting to the web
+        status_msg = cl.Message(content="Context not found in PDF. Searching the internet live...")
+        await status_msg.send()
+
+        # Run the background web search pass
+        try:
+            live_search_results = search_engine.run(user_query)
+        except Exception:
+            live_search_results = "Unable to retrieve live results right now."
+
+        # Clear the previous "I don't know" message block and stream the real answer
+        fallback_res = cl.Message(content="")
+        fallback_chain = internet_prompt | llm | StrOutputParser()
+
+        async for chunk in fallback_chain.astream({
+            "instruction": user_query,
+            "search_context": live_search_results,
+            "chat_history": formatted_history
+        }):
+            await fallback_res.stream_token(chunk)
+
+        await fallback_res.send()
+        await status_msg.remove() # Clean up the status message
+
+        # Save the actual internet answer to history logs
+        history.append(f"User: {user_query}")
+        history.append(f"Assistant: {fallback_res.content}")
+        cl.user_session.set("history_logs", history)
+    else:
+        # Save the valid PDF answer to history logs
+        history.append(f"User: {user_query}")
+        history.append(f"Assistant: {full_pdf_response}")
+        cl.user_session.set("history_logs", history)
 
 
 @cl.on_message
