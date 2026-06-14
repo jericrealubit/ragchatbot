@@ -1,20 +1,26 @@
-# 🚀 Enterprise PDF Chatbot (RAG Architecture)
+# 🚀 Enterprise PDF Chatbot (Hybrid RAG & Live Search)
 
-Welcome! This system utilizes a secure, localized **Retrieval-Augmented Generation (RAG)** pipeline. When you upload a PDF, it segments the text, converts it into mathematical vectors using a local embedding model, caches it in a high-performance memory store (FAISS), and leverages **Groq Cloud's Llama 3.1 architecture** for instant, context-aware streaming responses.
+Welcome! This system is a high-performance intelligence layer powered by **Chainlit** and **LangChain Engine Expressions (LCEL)**. It features an adaptive, dual-route architecture designed to pull down target information smoothly depending on user context:
+
+1. **Document RAG Mode:** When a PDF is uploaded, text chunks are converted into local geometric vectors using a localized embedding transformer model (`all-MiniLM-L6-v2`) and indexed via an in-memory `FAISS` database for contextual query matching ($k=3$).
+2. **Live Web Search Mode:** If no document is active in the session cache, the application seamlessly adapts, utilizing a real-time internet search utility to scrape relevant web contexts on-the-fly.
+
+All inference requests are handled via high-throughput **Groq Cloud API architectures** running optimized `Llama 3.1` model instances with dynamic rolling conversational history log tracking.
 
 ---
 
 ## 💡 How to Use
-1. Click the **Paperclip / Attachment icon** in the chat box below.
-2. Select your target `.pdf` file (e.g., an invoice, contract, or documentation sheet).
-3. Type your instructions alongside the upload (e.g., *"Summarize this"* or *"How much is the total amount?"*) and hit Enter.
-4. Continue asking follow-up questions sequentially—the system maintains a rolling conversation memory!
+
+* **Option A: General & Live Internet Queries** Simply type any general knowledge or real-time query straight into the message box (e.g., *"What is the weather like in Perth today?"* or *"Who won the match last night?"*). The assistant will access the live web to formulate a precise answer.
+
+* **Option B: Secure PDF Context Analysis**
+  Click the 📎 **Paperclip / Attachment icon** in the input tray to submit a target `.pdf` file. You can attach a question directly alongside your upload (e.g., *"Extract the total balance due"*). Once indexed, you can continue asking sequential follow-up questions normally.
 
 ---
 
 ## 📬 Contact & Collaboration
 
-Are you a hiring manager or business owner looking to deploy advanced AI solutions, custom secure chatbots, or high-performance web frontends? Let's discuss how I can help streamline your workflows.
+Are you an engineering hiring manager looking for a versatile Full-Stack Web Developer with practical AI implementation skills, or a business owner looking to deploy optimized, zero-overhead automated intelligence tools onto your internal systems? Let's connect!
 
 * **Name:** Jeric Realubit
 * **Role:** Full-Stack Web Developer & AI Solutions Engineer

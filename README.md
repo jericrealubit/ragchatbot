@@ -1,48 +1,47 @@
----
-# Local RAG Enterprise PDF Chatbot
+# Local Hybrid RAG & Live Search Enterprise Chatbot
 
-A production-ready **Retrieval-Augmented Generation (RAG)** application built with **Chainlit** and **LangChain**. This chatbot enables secure, contextual conversations over local PDF documents by combining localized semantic vector searches with high-throughput cloud inference.
+A production-ready **Retrieval-Augmented Generation (RAG)** application built with **Chainlit** and **LangChain**. This chatbot features a dynamic dual-routing architecture: it enables secure, contextual conversations over local PDF documents using localized semantic vector searches, and seamlessly falls back to real-time internet search when no document is active.
 
 ---
 
 ## 🏗️ Core Architecture Flow
 
-The backend processes incoming data and user interactions through a fully decoupled pipeline:
+The application handles incoming user intents and document processing through two primary processing paths:
 
-1. **Ingestion & Text Extraction:** Native binary reading and noise cleanup of documents.
-2. **Chunking & Segmentation:** Splitting extensive text blocks into managed semantic slices to fit LLM context ceilings perfectly.
-3. **Vector Embeddings:** Mapping text into high-dimensional geometric coordinates.
-4. **Local Store Indexing:** Caching structural indices locally for fast vector similarity lookups ($k=3$).
-5. **Contextual Inference:** Dynamically pairing matching document context, sliding conversational memory logs, and user prompts into a streamlined payload handled by high-performance inference models.
+1. **Document RAG Path:** When a PDF is supplied, raw binary pages are extracted, cleaned, and segmented into 1,000-character semantic chunks. These blocks are vectorized using a local transformer model (`all-MiniLM-L6-v2`) and cached in an in-memory `FAISS` vector index for ultra-low latency similarity parsing ($k=3$).
+2. **Live Web Search Path:** If no document is active in the user session memory, the application executes live background search queries via DuckDuckGo. Real-time web result snippets are scraped and dynamically injected straight into the LLM context layer.
+
+All operations feature optimized streaming tokens over high-throughput **Groq Cloud API frameworks** (`llama-3.1-8b-instant`) with a rolling conversational turn tracker preserving contextual continuity.
 
 ---
 
 ## 🛠️ Explaining the Deep Stack (Imported Tools)
 
-To maintain clean, professional documentation, here is exactly what every imported tool handles inside your `chatpdf.py` file:
+To maintain transparent, professional documentation, here is exactly what every imported tool handles inside your `chatpdf.py` execution layer:
 
 ### Core Python Modules
 
-* **`os`**: Manages operational environment routing, enabling the script to securely fetch your underlying system variables without exposing raw values in the codebase.
-* **`re`**: Python's native Regular Expressions library. It cleans up extracted PDF strings by stripping out structural page numbers, image headers, and noisy formatting artifacts before indexing.
-* **`logging`**: Overrides background engine diagnostics. It silences harmless operational verbosity from matrix computing engines (like FAISS) to keep your command-line output clean.
+* **`os`**: Handles system operational environmental calls, pulling down host credentials safely without exposing private parameters inside the repository.
+* **`re`**: Python's native Regular Expressions engine. It purges noisy extraction metadata (like layout page markings and image artifacts) from the text buffer prior to embedding.
+* **`logging`**: Silences non-critical background runtime diagnostic logging from matrix math subsystems like FAISS to keep your application output clean.
 
-### Chainlit (Asynchronous Interface Engine)
+### Chainlit (Asynchronous Core Framework)
 
-* **`chainlit` (`cl`)**: An asynchronous Python framework used to build production-grade conversational UIs. It manages real-time UI interactions, streams data chunks smoothly, and handles cross-origin browser network events natively.
+* **`chainlit` (`cl`)**: An asynchronous python automation library for launching interactive chat interfaces. It natively manages user socket states, pushes token text blocks smoothly, and parses client-side interaction events.
 
-### LangChain Orchestration & Expression Framework
+### LangChain Expression Language (LCEL) & Utilities
 
-* **`ChatOpenAI`**: A modular communication class configured here to point directly to Groq Cloud's ultra-fast inference infrastructure using an OpenAI-compatible API gateway.
-* **`PromptTemplate`**: Structures dynamic inputs. It acts as an architectural blueprint that enforces system behavior boundaries, mapping raw document extracts and chat history logs into a rigid format before sending it to the LLM.
-* **`StrOutputParser`**: Extracts text from raw API response objects. It strips away complex token arrays and status metadata, outputting only the pure string answer for the frontend user interface.
+* **`ChatOpenAI`**: A communication model layer mapped directly to Groq Cloud's ultra-low-latency endpoint infrastructure utilizing an OpenAI-compatible translation class.
+* **`PromptTemplate`**: Structures input formatting rules. Enforces behavioral bounds, compiling your live search strings or vector context arrays cleanly alongside active history logs before execution.
+* **`StrOutputParser`**: Extracts text strings from raw LLM object responses, filtering out performance metrics or structural tokens for clean UI presentation.
+* **`DuckDuckGoSearchAPIWrapper`**: A zero-config network connector that acts as the real-time internet engine when the app runs without an active document database.
 
-### Document Processing & Mathematical Vectors
+### Data Ingestion & Mathematical Vectors
 
-* **`RecursiveCharacterTextSplitter`**: Splitting text blindly by word count breaks sentences apart. This utility intelligently splits text by searching for natural line breaks, paragraph marks, and spaces, establishing a 1,000-character chunk matrix with a 200-character safety overlap to preserve contextual continuity.
-* **`HuggingFaceEmbeddings`**: Downloads and interfaces with the underlying sentence-transformers engine. It converts plain sentences into dense 384-dimensional mathematical floating-point arrays representing semantic meaning.
-* **`FAISS`**: *Facebook AI Similarity Search*. A high-efficiency, localized vector database that clusters and indexes your embeddings directly in systems memory for blazing-fast similarity searches.
-* **`PdfReader`**: An implementation from `PyPDF2` that parses binary PDF file streams into raw, indexable string buffers.
+* **`RecursiveCharacterTextSplitter`**: Intelligently splices long document texts by natural word bounds and paragraph breaks using a 1,000-character chunk boundary with a 200-character rolling overlap.
+* **`HuggingFaceEmbeddings`**: Manages the underlying sentence-transformers engine to convert readable text strings into 384-dimensional semantic matrix arrays.
+* **`FAISS`**: *Facebook AI Similarity Search*. An optimized structural calculation engine running locally in system memory to perform vector cosine similarity calculations.
+* **`PdfReader`**: An implementation from `PyPDF2` that reads binary PDF files into raw string buffers.
 
 ---
 
@@ -50,42 +49,42 @@ To maintain clean, professional documentation, here is exactly what every import
 
 ### 1. Environmental Dependencies
 
-Run the following package install via your environment terminal. This includes `sentence-transformers` to guarantee your local text vectorization runs out-of-the-box:
+Install all package dependencies directly into your active runtime environment using the python binary module command flag:
 
 ```bash
-python -m pip install chainlit langchain langchain-openai langchain-community langchain-text-splitters faiss-cpu PyPDF2 python-dotenv sentence-transformers
+python -m pip install chainlit langchain langchain-openai langchain-community langchain-text-splitters faiss-cpu PyPDF2 python-dotenv sentence-transformers duckduckgo-search ddgs
 
 ```
 
 ### 2. Guarding Secrets (`.env`)
 
-Create an environment file named exactly `.env` in the root folder of your project to manage configurations cleanly:
+Create an environment file named exactly `.env` at your root directory path to secure your infrastructure access tokens:
 
 ```text
 GROQ_API_KEY=gsk_your_private_api_key_here
 
 ```
 
-> ⚠️ **Important:** Add `.env` to your `.gitignore` configuration file immediately to block credential scanning on git pushes.
+> ⚠️ **Security Policy Reminder:** Ensure your project's `.gitignore` contains a line explicitly omitting `.env` configurations from Git tracking layers.
 
 ---
 
 ## 🏃 Execution Workflow
 
-Launch the application using your explicit solution target pathway:
+Launch the live application streaming engine by target-pointing to your python solution structure:
 
 ```bash
 chainlit run solutions/langchain/chatpdf.py --host 0.0.0.0 --port 8080
 
 ```
 
-Once running, navigate to the local server port provided inside your terminal log. Drop an item (like an invoice or documentation sheet) using the **paperclip icon**, type your query simultaneously (e.g., *"How much to pay"*), and witness real-time streaming context generation!
+Once initialized, open the forwarded port interface link provided in your console logs. You can interact directly with the web search functionality, or load up an invoice, spreadsheet, or documentation guide using the attachment bar to lock down localized RAG operations.
 
 ---
 
 ## 📬 Contact & Collaboration
 
-Are you a hiring manager looking for a versatile Full-Stack Web Developer with hands-on AI integration experience, or a business seeking to optimize workflows with a custom secure chatbot? Let's connect! I build robust, scaleable intelligence layers and modern web frontends tailored to business needs.
+Are you an engineering hiring manager looking for a versatile Full-Stack Web Developer with practical AI implementation skills, or a business owner looking to deploy optimized, zero-overhead automated intelligence tools onto your internal systems? Let's connect!
 
 * **Name:** Jeric Realubit
 * **Role:** Full-Stack Web Developer & AI Solutions Engineer
@@ -93,5 +92,3 @@ Are you a hiring manager looking for a versatile Full-Stack Web Developer with h
 * **LinkedIn:** [linkedin.com/in/jericrealubit](https://www.google.com/search?q=https://linkedin.com/in/jericrealubit)
 * **Mobile:** [+61 491 098 073](https://www.google.com/search?q=tel:%2B61491098073)
 * **GitHub:** [github.com/jericrealubit](https://www.google.com/search?q=https://github.com/jericrealubit)
-
----
