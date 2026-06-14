@@ -2,6 +2,7 @@ import os
 import re
 import logging
 import chainlit as cl
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -10,13 +11,16 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from PyPDF2 import PdfReader
 
+# This searches for a .env file and loads its variables into your environment
+load_dotenv()
+
 # Suppress harmless background loading notifications from FAISS matrix engine
 logging.getLogger("faiss.loader").setLevel(logging.ERROR)
 
 # Initialize Groq Cloud LLM
 llm = ChatOpenAI(
     openai_api_base="https://api.groq.com/openai/v1",
-    openai_api_key=os.environ.get("GROQ_API_KEY", ""),
+    openai_api_key=os.environ.get("GROQ_API_KEY"),
     model_name="llama-3.1-8b-instant",
     temperature=0.2
 )
