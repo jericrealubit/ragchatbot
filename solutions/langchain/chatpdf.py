@@ -16,8 +16,8 @@ logging.getLogger("faiss.loader").setLevel(logging.ERROR)
 # Initialize Groq Cloud LLM
 llm = ChatOpenAI(
     openai_api_base="https://api.groq.com/openai/v1",
-    openai_api_key=os.environ.get("GROQ_API_KEY", "your-groq-api-key-here"),
-    model_name="llama-3.1-8b-instant", 
+    openai_api_key=os.environ.get("GROQ_API_KEY", ""),
+    model_name="llama-3.1-8b-instant",
     temperature=0.2
 )
 
@@ -80,14 +80,14 @@ async def on_file_upload(files: list[cl.File]):
             "pdf_context": (lambda x: x["instruction"]) | retriever | (lambda docs: "\n\n".join([d.page_content for d in docs])),
             "instruction": lambda x: x["instruction"]
         }
-        | prompt 
-        | llm 
+        | prompt
+        | llm
         | StrOutputParser()
     )
 
     # Store the active document chain in the session
     cl.user_session.set("chain", chain)
-    
+
     msg.content = f"`{pdf_file.name}` successfully processed! Feel free to type your questions now."
     await msg.update()
 
@@ -95,7 +95,7 @@ async def on_file_upload(files: list[cl.File]):
 @cl.on_message
 async def on_message(message: cl.Message):
     chain = cl.user_session.get("chain")
-    
+
     # Safety fallback if they message before uploading anything
     if not chain:
         await cl.Message(content="Please upload a PDF document using the attach icon first!").send()
