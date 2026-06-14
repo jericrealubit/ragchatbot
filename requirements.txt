@@ -89,3 +89,7 @@ wsproto==1.2.0
 yarl==1.9.4
 zipp==3.17.0
 langchain-openai
+langchain-openai
+PyPDF2
+langchain-community
+chromadb
