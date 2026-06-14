@@ -1,14 +1,24 @@
-# Welcome to Chainlit! 🚀🤖
+# 🚀 Enterprise PDF Chatbot (RAG Architecture)
 
-Hi there, Human! 👋 We're excited to have you on board. Chainlit is a powerful tool designed to help you prototype, debug and share applications built on top of LLMs.
+Welcome! This system utilizes a secure, localized **Retrieval-Augmented Generation (RAG)** pipeline. When you upload a PDF, it segments the text, converts it into mathematical vectors using a local embedding model, caches it in a high-performance memory store (FAISS), and leverages **Groq Cloud's Llama 3.1 architecture** for instant, context-aware streaming responses.
 
-## Useful Links 🔗
+---
 
-- **Documentation:** Get started with our comprehensive [Chainlit Documentation](https://docs.chainlit.io) 📚
-- **Discord Community:** Join our friendly [Chainlit Discord](https://discord.gg/k73SQ3FyUh) to ask questions, share your projects, and connect with other developers! 💬
+## 💡 How to Use
+1. Click the **Paperclip / Attachment icon** in the chat box below.
+2. Select your target `.pdf` file (e.g., an invoice, contract, or documentation sheet).
+3. Type your instructions alongside the upload (e.g., *"Summarize this"* or *"How much is the total amount?"*) and hit Enter.
+4. Continue asking follow-up questions sequentially—the system maintains a rolling conversation memory!
 
-We can't wait to see what you create with Chainlit! Happy coding! 💻😊
+---
 
-## Welcome screen
+## 📬 Contact & Collaboration
 
-To modify the welcome screen, edit the `chainlit.md` file at the root of your project. If you do not want a welcome screen, just leave this file empty.
+Are you a hiring manager or business owner looking to deploy advanced AI solutions, custom secure chatbots, or high-performance web frontends? Let's discuss how I can help streamline your workflows.
+
+* **Name:** Jeric Realubit
+* **Role:** Full-Stack Web Developer & AI Solutions Engineer
+* **Location:** Perth, Western Australia (Open to local, hybrid, and global remote opportunities)
+* **LinkedIn:** [linkedin.com/in/jericrealubit](https://linkedin.com/in/jericrealubit)
+* **Mobile:** [+61 491 098 073](tel:+61491098073)
+* **GitHub:** [github.com/jericrealubit](https://github.com/jericrealubit)

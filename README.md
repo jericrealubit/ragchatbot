@@ -1,3 +1,4 @@
+---
 # Local RAG Enterprise PDF Chatbot
 
 A production-ready **Retrieval-Augmented Generation (RAG)** application built with **Chainlit** and **LangChain**. This chatbot enables secure, contextual conversations over local PDF documents by combining localized semantic vector searches with high-throughput cloud inference.
@@ -78,4 +79,19 @@ chainlit run solutions/langchain/chatpdf.py --host 0.0.0.0 --port 8080
 
 ```
 
-Once running, navigate to the local server port provided inside your terminal log. Drop an item (like an invoice or documentation sheet) using the **paperclip icon**, type your query simultaneously (e.g., *"summarize the content"*), and witness real-time streaming context generation!
+Once running, navigate to the local server port provided inside your terminal log. Drop an item (like an invoice or documentation sheet) using the **paperclip icon**, type your query simultaneously (e.g., *"How much to pay"*), and witness real-time streaming context generation!
+
+---
+
+## 📬 Contact & Collaboration
+
+Are you a hiring manager looking for a versatile Full-Stack Web Developer with hands-on AI integration experience, or a business seeking to optimize workflows with a custom secure chatbot? Let's connect! I build robust, scaleable intelligence layers and modern web frontends tailored to business needs.
+
+* **Name:** Jeric Realubit
+* **Role:** Full-Stack Web Developer & AI Solutions Engineer
+* **Location:** Perth, Western Australia (Open to local, hybrid, and global remote opportunities)
+* **LinkedIn:** [linkedin.com/in/jericrealubit](https://www.google.com/search?q=https://linkedin.com/in/jericrealubit)
+* **Mobile:** [+61 491 098 073](https://www.google.com/search?q=tel:%2B61491098073)
+* **GitHub:** [github.com/jericrealubit](https://www.google.com/search?q=https://github.com/jericrealubit)
+
+---
