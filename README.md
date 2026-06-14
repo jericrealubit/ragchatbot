@@ -4,6 +4,13 @@ A production-ready **Retrieval-Augmented Generation (RAG)** application built wi
 
 ---
 
+## 🚀 Live Application
+Try the live system deployed on my domain here: [waai.au/chat](https://waai.au/chat)
+
+<img width="50%" height="1810" alt="image" src="https://github.com/user-attachments/assets/781b8169-ee00-4070-a39e-f30747ebfaeb" />
+
+---
+
 ## 🏗️ Core Architecture Flow
 
 The application handles incoming user intents and document processing through two primary processing paths:
