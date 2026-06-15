@@ -11,8 +11,8 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from PyPDF2 import PdfReader
 
-# 1. NEW IMPORT: Grab the DuckDuckGo Search utility
-from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
+# 1. UPGRADED IMPORT: Switch from DuckDuckGo to true Google index parsing
+from langchain_community.utilities import SerpAPIWrapper
 
 # Load environment variables securely
 load_dotenv()
@@ -26,8 +26,9 @@ llm = ChatOpenAI(
     temperature=0.2
 )
 
-# 2. INITIALIZE THE SEARCH ENGINE
-search_engine = DuckDuckGoSearchAPIWrapper(max_results=3)
+# 2. INITIALIZE NATIVE GOOGLE SEARCH
+# SerpAPI automatically uses Google Search under the hood
+search_engine = SerpAPIWrapper()
 
 # Base Prompt Template for PDF interactions
 template = """
@@ -44,12 +45,12 @@ User Question: {instruction}
 Assistant Answer:"""
 prompt = PromptTemplate(template=template, input_variables=["pdf_context", "chat_history", "instruction"])
 
-# 3. INTERNET FALLBACK PROMPT TEMPLATE
+# INTERNET FALLBACK PROMPT TEMPLATE
 internet_template = """
-You are a helpful AI assistant with real-time internet access capabilities.
-Use the Live Search Results and Chat History below to provide a precise, clear, and accurate answer to the user's question.
+You are a helpful AI assistant with real-time Google internet access capabilities.
+Use the Live Google Search Results and Chat History below to provide a precise, clear, and accurate answer to the user's question.
 
-Live Search Results:
+Live Google Search Results:
 {search_context}
 
 Recent Chat History:
@@ -60,18 +61,47 @@ Assistant Answer:"""
 internet_prompt = PromptTemplate(template=internet_template, input_variables=["search_context", "chat_history", "instruction"])
 
 
-@cl.on_chat_start
-async def on_chat_start():
-    await cl.ChatSettings([
-        cl.input_widget.Select(id="file_upload_status", label="File Upload Tray", values=["Enabled"], initial_value="Enabled")
-    ]).send()
-    cl.user_session.set("chain", None)
-    cl.user_session.set("history_logs", [])
-    await cl.Message(content="Welcome! Upload a PDF to start a document chat, or ask anything to search the web live!").send()
+def get_search_parameters(user_query: str):
+    """Helper utility to localize queries and configure time parameters."""
+    search_query = user_query
+
+    # Localize weather anomalies automatically
+    if "weather" in user_query.lower() and "perth" not in user_query.lower():
+        search_query = f"{user_query} Perth Western Australia"
+
+    return search_query
+
+
+async def fetch_structured_web_results(query: str):
+    """Queries Google's live engine via SerpAPI, returning matching titles, snippets, and structural reference links."""
+    try:
+        # Fetch Google's official organic response matrix
+        raw_response = search_engine.results(query)
+        organic_results = raw_response.get("organic_results", [])[:3] # Cap at top 3 Google results
+    except Exception:
+        organic_results = []
+
+    if organic_results:
+        context_pieces = []
+        ui_cards = ["\n\n### 🌐 Google Search Results Found:"]
+
+        for idx, result in enumerate(organic_results, 1):
+            title = result.get("title", "No Title")
+            url = result.get("link", "#")
+            snippet = result.get("snippet", "")
+
+            # Formulate structural logs for LLM comprehension
+            context_pieces.append(f"Source [{idx}]: {title}\nURL: {url}\nSnippet: {snippet}\n")
+            # Build interactive markdown components for the Chainlit viewport
+            ui_cards.append(f"{idx}. **[{title}]({url})**\n   _{snippet}_\n")
+
+        return "\n".join(context_pieces), "\n".join(ui_cards)
+
+    return "No current live search data found.", ""
 
 
 async def execute_query(user_query: str):
-    """Streams standard document RAG queries, with an automatic internet fallback if not found"""
+    """Streams standard document RAG queries with an automatic Google engine fallback."""
     chain = cl.user_session.get("chain")
     history = cl.user_session.get("history_logs")
     if not chain:
@@ -79,64 +109,63 @@ async def execute_query(user_query: str):
 
     formatted_history = "\n".join(history[-6:]) if history else "No previous history."
 
-    # 1. First, try to get the answer from the PDF context
     pdf_response_chunks = []
     res = cl.Message(content="")
 
-    async for chunk in chain.astream({
-        "instruction": user_query,
-        "chat_history": formatted_history
-    }):
+    async for chunk in chain.astream({"instruction": user_query, "chat_history": formatted_history}):
         pdf_response_chunks.append(chunk)
         await res.stream_token(chunk)
 
     await res.send()
     full_pdf_response = "".join(pdf_response_chunks)
 
-    # 2. Check if the LLM failed to find it in the PDF context
     negative_phrases = ["don't know", "dont know", "not include", "not mentioned", "not found in context", "no information"]
     if any(phrase in full_pdf_response.lower() for phrase in negative_phrases):
-
-        # Update the UI to let the user know it's pivoting to the web
-        status_msg = cl.Message(content="Context not found in PDF. Searching the internet live...")
+        status_msg = cl.Message(content="Context not found in PDF. Consulting Google Search...")
         await status_msg.send()
 
-        # Run the background web search pass
-        try:
-            live_search_results = search_engine.run(user_query)
-        except Exception:
-            live_search_results = "Unable to retrieve live results right now."
+        search_query = get_search_parameters(user_query)
+        live_search_context, ui_references_output = await fetch_structured_web_results(search_query)
 
-        # Clear the previous "I don't know" message block and stream the real answer
         fallback_res = cl.Message(content="")
         fallback_chain = internet_prompt | llm | StrOutputParser()
 
         async for chunk in fallback_chain.astream({
             "instruction": user_query,
-            "search_context": live_search_results,
+            "search_context": live_search_context,
             "chat_history": formatted_history
         }):
             await fallback_res.stream_token(chunk)
 
-        await fallback_res.send()
-        await status_msg.remove() # Clean up the status message
+        if ui_references_output:
+            fallback_res.content += ui_references_output
 
-        # Save the actual internet answer to history logs
+        await fallback_res.send()
+        await status_msg.remove()
+
         history.append(f"User: {user_query}")
         history.append(f"Assistant: {fallback_res.content}")
-        cl.user_session.set("history_logs", history)
     else:
-        # Save the valid PDF answer to history logs
         history.append(f"User: {user_query}")
         history.append(f"Assistant: {full_pdf_response}")
-        cl.user_session.set("history_logs", history)
+
+    cl.user_session.set("history_logs", history)
+
+
+@cl.on_chat_start
+async def on_chat_start():
+    await cl.ChatSettings([
+        cl.input_widget.Select(id="file_upload_status", label="File Upload Tray", values=["Enabled"], initial_value="Enabled")
+    ]).send()
+    cl.user_session.set("chain", None)
+    cl.user_session.set("history_logs", [])
+    await cl.Message(content="Welcome! Upload a PDF to start a document chat, or ask anything to search Google live!").send()
 
 
 @cl.on_message
 async def on_message(message: cl.Message):
     text_prompt = message.content.strip()
 
-    # SECTION A: Document Upload Logic
     if message.elements:
         pdf_files = [el for el in message.elements if el.mime == "application/pdf" or el.name.endswith('.pdf')]
         if pdf_files:
@@ -148,7 +177,8 @@ async def on_message(message: cl.Message):
             pdf_text = ""
             for page in reader.pages:
                 text = page.extract_text()
-                if text: pdf_text += text + "\n"
+                if text:
+                    pdf_text += text + "\n"
 
             pdf_text = re.sub(r'\[Image \d+\]', '', pdf_text)
             pdf_text = re.sub(r'--- PAGE \d+ ---', '', pdf_text)
@@ -156,6 +186,13 @@ async def on_message(message: cl.Message):
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
             docs = text_splitter.create_documents([pdf_text])
 
+            # 🛠️ NEW DEFENSIVE GUARD: Prevent FAISS IndexError if text extraction returns nothing
+            if not docs or not pdf_text.strip():
+                status_msg.content = f"⚠️ Processing failed! `{pdf_file.name}` appears to be an empty document or a scanned image with no extractable embedded text."
+                await status_msg.update()
+                return
+
+            # This line will now only execute safely if documents actually exist!
             embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
             vector_store = FAISS.from_documents(docs, embeddings)
             retriever = vector_store.as_retriever(search_kwargs={"k": 3})
@@ -180,38 +217,34 @@ async def on_message(message: cl.Message):
                 await cl.Message(content="Document ready! What would you like to know about it?").send()
             return
 
-    # SECTION B: Multi-Route Execution Processing Flow
     chain = cl.user_session.get("chain")
     history = cl.user_session.get("history_logs")
     formatted_history = "\n".join(history[-6:]) if history else "No previous history."
 
     if text_prompt:
         if chain:
-            # Route 1: PDF Document is active -> Query vector storage context layers
             await execute_query(text_prompt)
         else:
-            # Route 2: Standalone conversation -> Trigger Internet Search Fallback
             res = cl.Message(content="")
 
-            # Run the background web scraping pass asynchronously
-            try:
-                live_search_results = search_engine.run(text_prompt)
-            except Exception:
-                live_search_results = "Unable to retrieve live results right now. Rely on core parameters."
+            # Query Google's index live
+            search_query = get_search_parameters(text_prompt)
+            live_search_context, ui_references_output = await fetch_structured_web_results(search_query)
 
-            # Construct dynamic LCEL stream pipeline passing scraped parameters
             fallback_chain = internet_prompt | llm | StrOutputParser()
 
             async for chunk in fallback_chain.astream({
                 "instruction": text_prompt,
-                "search_context": live_search_results,
+                "search_context": live_search_context,
                 "chat_history": formatted_history
             }):
                 await res.stream_token(chunk)
 
+            if ui_references_output:
+                res.content += ui_references_output
+
             await res.send()
 
-            # Sync context exchanges into session-wide history trackers
             history.append(f"User: {text_prompt}")
             history.append(f"Assistant: {res.content}")
             cl.user_session.set("history_logs", history)
