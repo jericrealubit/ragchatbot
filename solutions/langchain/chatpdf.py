@@ -3,13 +3,14 @@ import re
 import logging
 import chainlit as cl
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+# from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from PyPDF2 import PdfReader
+from langchain_groq import ChatGroq
 
 # 1. UPGRADED IMPORT: Switch from DuckDuckGo to true Google index parsing
 from langchain_community.utilities import SerpAPIWrapper
@@ -19,11 +20,11 @@ load_dotenv()
 logging.getLogger("faiss.loader").setLevel(logging.ERROR)
 
 # Initialize Groq Cloud LLM
-llm = ChatOpenAI(
-    openai_api_base="https://api.groq.com/openai/v1",
-    openai_api_key=os.environ.get("GROQ_API_KEY"),
-    model_name="llama-3.1-8b-instant",
-    temperature=0.2
+llm = ChatGroq(
+    model_name="openai/gpt-oss-20b",
+    groq_api_key=os.environ.get("GROQ_API_KEY"),
+    temperature=0.2,
+    # streaming=True is handled safely out of the box here
 )
 
 # 2. INITIALIZE NATIVE GOOGLE SEARCH
@@ -34,6 +35,10 @@ search_engine = SerpAPIWrapper()
 template = """
 You are a helpful AI assistant. Use the following PDF Reference Context and Chat History to answer the user's question accurately.
 If you do not know the answer based on the context, politely state that you don't know. Keep your answer direct, clear, and concise.
+
+CRITICAL FORMATTING RULE:
+Respond using natural, clean conversational prose or basic markdown bullet points only.
+Do NOT output raw JSON blocks, XML tags, nested array brackets, or code-like schemas, as this will trigger a backend API error.
 
 PDF Reference Context:
 {pdf_context}
@@ -49,6 +54,8 @@ prompt = PromptTemplate(template=template, input_variables=["pdf_context", "chat
 internet_template = """
 You are a helpful AI assistant with real-time Google internet access capabilities.
 Use the Live Google Search Results and Chat History below to provide a precise, clear, and accurate answer to the user's question.
+
+CRITICAL MODEL CONSTRAINT: Do NOT attempt to call, invoke, or format any internal or external tools, functions, or special Harmony format tags (such as <|call|>, <|search|>, or JSON tool blocks). You are operating in a text-generation sandbox. Output your entire response as standard conversational text and clean Markdown only.
 
 Live Google Search Results:
 {search_context}
@@ -90,9 +97,10 @@ async def fetch_structured_web_results(query: str):
             url = result.get("link", "#")
             snippet = result.get("snippet", "")
 
-            # Formulate structural logs for LLM comprehension
-            context_pieces.append(f"Source [{idx}]: {title}\nURL: {url}\nSnippet: {snippet}\n")
-            # Build interactive markdown components for the Chainlit viewport
+            # ✅ FIXED: Plain text formatting for the LLM to prevent Groq tool-choice bugs
+            context_pieces.append(f"Search Result {idx} Title: {title}\nSummary: {snippet}\n")
+
+            # Keep interactive markdown components intact for the Chainlit UI viewport
             ui_cards.append(f"{idx}. **[{title}]({url})**\n   _{snippet}_\n")
 
         return "\n".join(context_pieces), "\n".join(ui_cards)
