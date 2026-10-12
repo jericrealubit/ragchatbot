@@ -1,15 +1,18 @@
 # 🚀 Enterprise PDF Chatbot (Hybrid RAG & Live Search)
 
-Welcome! This system is a high-performance intelligence layer powered by **Chainlit** and **LangChain Engine Expressions (LCEL)**. It features an adaptive, dual-route architecture designed to pull down target information smoothly depending on user context:
+Welcome! This system is a high-performance intelligence layer powered by **Chainlit** and **LangChain Engine Expressions (LCEL)**. It features an adaptive, three-route architecture designed to pull down target information smoothly depending on user context:
 
-1. **Document RAG Mode:** When a PDF is uploaded, text chunks are converted into local geometric vectors using a localized embedding transformer model (`all-MiniLM-L6-v2`) and indexed via an in-memory `FAISS` database for contextual query matching ($k=3$).
-2. **Live Web Search Mode:** If no document is active in the session cache, the application seamlessly adapts, utilizing a real-time internet search utility to scrape relevant web contexts on-the-fly.
+1. **WA AI Digital Mode:** Questions about WA AI Digital — services, pricing, projects, contact — are answered from [waai.au/llms.txt](https://waai.au/llms.txt), which the website generates from the same data its own pages are built from.
+2. **Document RAG Mode:** When a PDF is uploaded, text chunks are converted into local geometric vectors using a localized embedding transformer model (`all-MiniLM-L6-v2`) and indexed via an in-memory `FAISS` database for contextual query matching ($k=3$).
+3. **Live Web Search Mode:** Anything else, with no document active, goes to a real-time Google search, and the results are summarised with their sources.
 
-All inference requests are handled via high-throughput **Groq Cloud API architectures** running optimized `Llama 3.1` model instances with dynamic rolling conversational history log tracking.
+All inference requests are handled via high-throughput **Groq Cloud API architectures** running `openai/gpt-oss-20b` with dynamic rolling conversational history log tracking.
 
 ---
 
 ## 💡 How to Use
+
+* **Ask about WA AI Digital** — e.g. *"How much is a tradie website?"* or *"What did you build for BBQ Heaven?"*
 
 * **Option A: General & Live Internet Queries** Simply type any general knowledge or real-time query straight into the message box (e.g., *"What is the weather like in Perth today?"* or *"Who won the match last night?"*). The assistant will access the live web to formulate a precise answer.
 
