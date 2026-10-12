@@ -1,0 +1,45 @@
+name: Deploy to Hugging Face Space
+
+# GitHub `main` is what runs at huggingface.co/spaces/jericrealubit/ragchatbot
+# (embedded at waai.au/chat). Before this workflow the Space was uploaded by
+# hand and silently fell months behind main — still calling a Groq model that
+# had been retired, so every message failed.
+#
+# It pushes a one-commit snapshot of main's tree rather than main's history:
+# early commits contain PDFs from Chainlit's upload cache (.files/), and the
+# Hub rejects pushes carrying binary files outside LFS/Xet. The tree itself has
+# no binaries, and the real history stays here on GitHub.
+#
+# Needs the HF_TOKEN repository secret: a Hugging Face write token with access
+# to the Space. The app's own keys are Space secrets, not set here.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: hf-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Push a snapshot of main to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::error::The HF_TOKEN repository secret is not set."
+            exit 1
+          fi
+          git checkout --orphan hf-deploy
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit --quiet -m "Deploy ${GITHUB_SHA::7} from GitHub main"
+          git push --force \
+            "https://jericrealubit:${HF_TOKEN}@huggingface.co/spaces/jericrealubit/ragchatbot" \
+            hf-deploy:main
