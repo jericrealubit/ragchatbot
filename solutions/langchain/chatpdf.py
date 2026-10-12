@@ -1,6 +1,8 @@
 import os
 import re
+import time
 import logging
+import httpx
 import chainlit as cl
 from dotenv import load_dotenv
 # from langchain_openai import ChatOpenAI
@@ -39,6 +41,80 @@ def _get_search_engine():
             return None
         _search_engine = SerpAPIWrapper()
     return _search_engine
+
+
+# 3. WA AI DIGITAL FACTS — fetched from the site's own /llms.txt, which waai.au
+# generates from the same data its pages are built from, so the bot can't drift
+# from the site. Cached for hours; when the fetch fails, the last good copy is
+# kept (or, before the first success, questions fall through to live search)
+# and the fetch is retried a few minutes later rather than on every message.
+WAAI_FACTS_URL = os.environ.get("WAAI_FACTS_URL", "https://waai.au/llms.txt")
+WAAI_FACTS_TTL = 6 * 60 * 60
+WAAI_FACTS_RETRY = 5 * 60
+NOT_IN_SITE_FACTS = "NOT_IN_SITE_FACTS"
+_site_facts = ""
+_site_facts_next_fetch = 0.0
+
+
+async def get_site_facts() -> str:
+    global _site_facts, _site_facts_next_fetch
+    if time.monotonic() < _site_facts_next_fetch:
+        return _site_facts
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            response = await client.get(WAAI_FACTS_URL)
+            response.raise_for_status()
+        _site_facts = response.text.strip()
+        _site_facts_next_fetch = time.monotonic() + WAAI_FACTS_TTL
+    except Exception:
+        logging.exception("Could not fetch site facts from %s", WAAI_FACTS_URL)
+        _site_facts_next_fetch = time.monotonic() + WAAI_FACTS_RETRY
+    return _site_facts
+
+
+# Site facts prompt. The facts come first so the long, unchanging part of the
+# prompt is a stable prefix across questions.
+site_template = """
+You are the assistant on the WA AI Digital website (waai.au). These are the business's facts, generated from the website's own content:
+
+{site_facts}
+
+Answer the user's question using ONLY the facts above. Quote prices exactly as written and include the relevant page link when there is one. Never invent services, prices, clients, timelines or results that are not in the facts.
+
+If the question is not about WA AI Digital (its services, pricing, process, projects, people or contact details), or the facts do not answer it, reply with exactly NOT_IN_SITE_FACTS and nothing else.
+
+Respond in natural, clean conversational prose or basic markdown bullet points only. Do not output JSON, XML tags or tool calls.
+
+Recent Chat History:
+{chat_history}
+
+User Question: {instruction}
+Assistant Answer:"""
+site_prompt = PromptTemplate(template=site_template, input_variables=["site_facts", "chat_history", "instruction"])
+# A lookup over a short document doesn't need gpt-oss's default reasoning
+# budget, and every token here counts against the key's per-minute cap.
+site_chain = site_prompt | llm.bind(reasoning_effort="low") | StrOutputParser()
+
+
+async def answer_from_site(user_query: str, formatted_history: str) -> str | None:
+    """Answers from the WA AI Digital facts, or returns None when they don't cover the question."""
+    site_facts = await get_site_facts()
+    if not site_facts:
+        return None
+    try:
+        answer = await site_chain.ainvoke({
+            "site_facts": site_facts,
+            "chat_history": formatted_history,
+            "instruction": user_query,
+        })
+    except Exception:
+        logging.exception("Site facts answer failed")
+        return None
+    answer = (answer or "").strip()
+    if not answer or NOT_IN_SITE_FACTS in answer:
+        return None
+    return answer
+
 
 # Base Prompt Template for PDF interactions
 template = """
@@ -181,7 +257,9 @@ async def execute_query(user_query: str):
         if ui_references_output:
             fallback_res.content += ui_references_output
 
-        await fallback_res.update()
+        # send(), not update(): if nothing streamed (an error, or the empty-answer
+        # retry), the UI has never seen this message and drops an update to it.
+        await fallback_res.send()
         await status_msg.remove()
 
         history.append(f"User: {user_query}")
@@ -200,7 +278,7 @@ async def on_chat_start():
     ]).send()
     cl.user_session.set("chain", None)
     cl.user_session.set("history_logs", [])
-    await cl.Message(content="Welcome! Upload a PDF to start a document chat, or ask anything to search Google live!").send()
+    await cl.Message(content="Welcome! Ask me about WA AI Digital's services, pricing and projects. You can also upload a PDF to chat with it, or ask anything else and I'll search Google live.").send()
 
 
 @cl.on_message
@@ -266,6 +344,16 @@ async def on_message(message: cl.Message):
         if chain:
             await execute_query(text_prompt)
         else:
+            # Questions about the business are answered from the site's own
+            # facts; anything those don't cover falls through to live search.
+            site_answer = await answer_from_site(text_prompt, formatted_history)
+            if site_answer:
+                await cl.Message(content=site_answer).send()
+                history.append(f"User: {text_prompt}")
+                history.append(f"Assistant: {site_answer}")
+                cl.user_session.set("history_logs", history)
+                return
+
             res = cl.Message(content="")
 
             # Query Google's index live
@@ -283,7 +371,8 @@ async def on_message(message: cl.Message):
             if ui_references_output:
                 res.content += ui_references_output
 
-            await res.update()
+            # send(), not update() — see execute_query.
+            await res.send()
 
             history.append(f"User: {text_prompt}")
             history.append(f"Assistant: {res.content}")
