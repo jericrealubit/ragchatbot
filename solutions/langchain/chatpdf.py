@@ -205,24 +205,41 @@ async def fetch_structured_web_results(query: str):
     return "No current live search data found.", ""
 
 
+def _is_stray_tool_call(error: Exception) -> bool:
+    """gpt-oss sometimes calls its built-in browser tool instead of answering from
+    the context it was given, despite the prompt; Groq rejects that with
+    "Tool choice is none, but model called a tool" (code tool_use_failed)."""
+    text = str(error)
+    return "called a tool" in text or "tool_use_failed" in text
+
+
 async def stream_answer(chain, inputs: dict, res: cl.Message) -> str:
     """Streams a chain into a Chainlit message, guaranteeing the message never ends up blank."""
     chunks = []
-    try:
-        async for chunk in chain.astream(inputs):
-            chunks.append(chunk)
-            await res.stream_token(chunk)
+    attempts = 2
+    for attempt in range(1, attempts + 1):
+        try:
+            async for chunk in chain.astream(inputs):
+                chunks.append(chunk)
+                await res.stream_token(chunk)
 
-        # Reasoning models (gpt-oss) occasionally return an empty final answer; retry once without streaming
-        if not "".join(chunks).strip():
-            answer = await chain.ainvoke(inputs)
-            if answer and answer.strip():
-                chunks = [answer]
-                res.content = answer
-    except Exception as e:
-        logging.exception("LLM call failed")
-        res.content = f"⚠️ Sorry, the model failed to respond: {e}"
-        return ""
+            # Reasoning models (gpt-oss) occasionally return an empty final answer; retry once without streaming
+            if not "".join(chunks).strip():
+                answer = await chain.ainvoke(inputs)
+                if answer and answer.strip():
+                    chunks = [answer]
+                    res.content = answer
+            break
+        except Exception as e:
+            # A stray tool call is a sampling fluke, and a fresh attempt usually
+            # answers normally. Only retry while nothing has streamed, so the
+            # visitor never sees a half answer followed by a second one.
+            if _is_stray_tool_call(e) and not chunks and attempt < attempts:
+                logging.warning("Model called a tool instead of answering; retrying")
+                continue
+            logging.exception("LLM call failed")
+            res.content = f"⚠️ Sorry, the model failed to respond: {e}"
+            return ""
 
     answer = "".join(chunks)
     if not answer.strip():
