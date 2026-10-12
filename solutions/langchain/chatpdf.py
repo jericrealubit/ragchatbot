@@ -27,9 +27,18 @@ llm = ChatGroq(
     # streaming=True is handled safely out of the box here
 )
 
-# 2. INITIALIZE NATIVE GOOGLE SEARCH
-# SerpAPI automatically uses Google Search under the hood
-search_engine = SerpAPIWrapper()
+# 2. INITIALIZE NATIVE GOOGLE SEARCH (lazy — avoids crashing the app at import
+# time if SERPAPI_API_KEY is missing; PDF RAG still works without it)
+_search_engine = None
+
+
+def _get_search_engine():
+    global _search_engine
+    if _search_engine is None:
+        if not os.environ.get("SERPAPI_API_KEY"):
+            return None
+        _search_engine = SerpAPIWrapper()
+    return _search_engine
 
 # Base Prompt Template for PDF interactions
 template = """
@@ -81,9 +90,12 @@ def get_search_parameters(user_query: str):
 
 async def fetch_structured_web_results(query: str):
     """Queries Google's live engine via SerpAPI, returning matching titles, snippets, and structural reference links."""
+    engine = _get_search_engine()
+    if engine is None:
+        return "Live web search is disabled (SERPAPI_API_KEY not set).", ""
     try:
         # Fetch Google's official organic response matrix
-        raw_response = search_engine.results(query)
+        raw_response = engine.results(query)
         organic_results = raw_response.get("organic_results", [])[:3] # Cap at top 3 Google results
     except Exception:
         organic_results = []
@@ -108,24 +120,46 @@ async def fetch_structured_web_results(query: str):
     return "No current live search data found.", ""
 
 
+async def stream_answer(chain, inputs: dict, res: cl.Message) -> str:
+    """Streams a chain into a Chainlit message, guaranteeing the message never ends up blank."""
+    chunks = []
+    try:
+        async for chunk in chain.astream(inputs):
+            chunks.append(chunk)
+            await res.stream_token(chunk)
+
+        # Reasoning models (gpt-oss) occasionally return an empty final answer; retry once without streaming
+        if not "".join(chunks).strip():
+            answer = await chain.ainvoke(inputs)
+            if answer and answer.strip():
+                chunks = [answer]
+                res.content = answer
+    except Exception as e:
+        logging.exception("LLM call failed")
+        res.content = f"⚠️ Sorry, the model failed to respond: {e}"
+        return ""
+
+    answer = "".join(chunks)
+    if not answer.strip():
+        res.content = "⚠️ Sorry, the model returned an empty response. Please try again."
+    return answer
+
+
 async def execute_query(user_query: str):
     """Streams standard document RAG queries with an automatic Google engine fallback."""
     chain = cl.user_session.get("chain")
-    history = cl.user_session.get("history_logs")
+    history = cl.user_session.get("history_logs") or []
     if not chain:
         return
 
     formatted_history = "\n".join(history[-6:]) if history else "No previous history."
 
-    pdf_response_chunks = []
     res = cl.Message(content="")
-
-    async for chunk in chain.astream({"instruction": user_query, "chat_history": formatted_history}):
-        pdf_response_chunks.append(chunk)
-        await res.stream_token(chunk)
-
+    full_pdf_response = await stream_answer(chain, {"instruction": user_query, "chat_history": formatted_history}, res)
     await res.send()
-    full_pdf_response = "".join(pdf_response_chunks)
+
+    if not full_pdf_response.strip():
+        return
 
     negative_phrases = ["don't know", "dont know", "not include", "not mentioned", "not found in context", "no information"]
     if any(phrase in full_pdf_response.lower() for phrase in negative_phrases):
@@ -138,17 +172,16 @@ async def execute_query(user_query: str):
         fallback_res = cl.Message(content="")
         fallback_chain = internet_prompt | llm | StrOutputParser()
 
-        async for chunk in fallback_chain.astream({
+        await stream_answer(fallback_chain, {
             "instruction": user_query,
             "search_context": live_search_context,
             "chat_history": formatted_history
-        }):
-            await fallback_res.stream_token(chunk)
+        }, fallback_res)
 
         if ui_references_output:
             fallback_res.content += ui_references_output
 
-        await fallback_res.send()
+        await fallback_res.update()
         await status_msg.remove()
 
         history.append(f"User: {user_query}")
@@ -175,7 +208,7 @@ async def on_message(message: cl.Message):
     text_prompt = message.content.strip()
 
     if message.elements:
-        pdf_files = [el for el in message.elements if el.mime == "application/pdf" or el.name.endswith('.pdf')]
+        pdf_files = [el for el in message.elements if el.mime == "application/pdf" or (el.name or "").endswith('.pdf')]
         if pdf_files:
             pdf_file = pdf_files[0]
             status_msg = cl.Message(content=f"Analyzing and indexing `{pdf_file.name}`...")
@@ -226,7 +259,7 @@ async def on_message(message: cl.Message):
             return
 
     chain = cl.user_session.get("chain")
-    history = cl.user_session.get("history_logs")
+    history = cl.user_session.get("history_logs") or []
     formatted_history = "\n".join(history[-6:]) if history else "No previous history."
 
     if text_prompt:
@@ -241,17 +274,16 @@ async def on_message(message: cl.Message):
 
             fallback_chain = internet_prompt | llm | StrOutputParser()
 
-            async for chunk in fallback_chain.astream({
+            await stream_answer(fallback_chain, {
                 "instruction": text_prompt,
                 "search_context": live_search_context,
                 "chat_history": formatted_history
-            }):
-                await res.stream_token(chunk)
+            }, res)
 
             if ui_references_output:
                 res.content += ui_references_output
 
-            await res.send()
+            await res.update()
 
             history.append(f"User: {text_prompt}")
             history.append(f"Assistant: {res.content}")
