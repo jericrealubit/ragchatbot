@@ -16,9 +16,9 @@ Try the live system deployed on my domain here: [waai.au/chat](https://waai.au/c
 The application handles incoming user intents and document processing through two primary processing paths:
 
 1. **Document RAG Path:** When a PDF is supplied, raw binary pages are extracted, cleaned, and segmented into 1,000-character semantic chunks. These blocks are vectorized using a local transformer model (`all-MiniLM-L6-v2`) and cached in an in-memory `FAISS` vector index for ultra-low latency similarity parsing ($k=3$).
-2. **Live Web Search Path:** If no document is active in the user session memory, the application executes live background search queries via DuckDuckGo. Real-time web result snippets are scraped and dynamically injected straight into the LLM context layer.
+2. **Live Web Search Path:** If no document is active in the user session memory, the application executes live Google search queries via SerpAPI. Real-time organic result snippets are injected straight into the LLM context layer.
 
-All operations feature optimized streaming tokens over high-throughput **Groq Cloud API frameworks** (`llama-3.1-8b-instant`) with a rolling conversational turn tracker preserving contextual continuity.
+All operations feature optimized streaming tokens over high-throughput **Groq Cloud API frameworks** (`openai/gpt-oss-20b` via `ChatGroq`) with a rolling conversational turn tracker preserving contextual continuity.
 
 ---
 
@@ -38,10 +38,10 @@ To maintain transparent, professional documentation, here is exactly what every 
 
 ### LangChain Expression Language (LCEL) & Utilities
 
-* **`ChatOpenAI`**: A communication model layer mapped directly to Groq Cloud's ultra-low-latency endpoint infrastructure utilizing an OpenAI-compatible translation class.
+* **`ChatGroq`**: A communication model layer mapped directly to Groq Cloud's ultra-low-latency endpoint infrastructure (`openai/gpt-oss-20b`).
 * **`PromptTemplate`**: Structures input formatting rules. Enforces behavioral bounds, compiling your live search strings or vector context arrays cleanly alongside active history logs before execution.
 * **`StrOutputParser`**: Extracts text strings from raw LLM object responses, filtering out performance metrics or structural tokens for clean UI presentation.
-* **`DuckDuckGoSearchAPIWrapper`**: A zero-config network connector that acts as the real-time internet engine when the app runs without an active document database.
+* **`SerpAPIWrapper`**: Live Google search connector that acts as the real-time internet engine when the app runs without an active document database.
 
 ### Data Ingestion & Mathematical Vectors
 
@@ -56,21 +56,28 @@ To maintain transparent, professional documentation, here is exactly what every 
 
 ### 1. Environmental Dependencies
 
-Install all package dependencies directly into your active runtime environment using the python binary module command flag:
+Python 3.11 is recommended (matches the Dockerfile). Install all package dependencies from the pinned requirements file:
 
 ```bash
-python -m pip install chainlit langchain langchain-openai langchain-community langchain-text-splitters faiss-cpu PyPDF2 python-dotenv sentence-transformers duckduckgo-search ddgs
+python -m venv .venv
+# Windows PowerShell: .\.venv\Scripts\Activate.ps1
+# bash:               source .venv/bin/activate
+pip install -r requirements.txt
 
 ```
 
 ### 2. Guarding Secrets (`.env`)
 
-Create an environment file named exactly `.env` at your root directory path to secure your infrastructure access tokens:
+Copy `.env.example` to `.env` and fill in both keys:
 
 ```text
 GROQ_API_KEY=gsk_your_private_api_key_here
+SERPAPI_API_KEY=your_serpapi_key_here
 
 ```
+
+- `GROQ_API_KEY` → https://console.groq.com/keys
+- `SERPAPI_API_KEY` → https://serpapi.com/manage-api-key (free tier: 100 searches/month). Without it, PDF RAG still works but the live-web-search path returns a disabled notice.
 
 > ⚠️ **Security Policy Reminder:** Ensure your project's `.gitignore` contains a line explicitly omitting `.env` configurations from Git tracking layers.
 
