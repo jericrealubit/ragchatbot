@@ -153,6 +153,12 @@ Assistant Answer:"""
 internet_prompt = PromptTemplate(template=internet_template, input_variables=["search_context", "chat_history", "instruction"])
 
 
+# A bare "Perth" — one not already followed by WA / Western Australia /
+# Australia. Google's index is global, and on its own the word resolves to
+# Perth, Guyana or Perth, Scotland as readily as Perth, WA.
+_UNQUALIFIED_PERTH = re.compile(r"\bperth\b(?!,?\s+(?:wa|western\s+australia|australia)\b)", re.IGNORECASE)
+
+
 def get_search_parameters(user_query: str):
     """Helper utility to localize queries and configure time parameters."""
     search_query = user_query
@@ -160,6 +166,9 @@ def get_search_parameters(user_query: str):
     # Localize weather anomalies automatically
     if "weather" in user_query.lower() and "perth" not in user_query.lower():
         search_query = f"{user_query} Perth Western Australia"
+
+    # This bot lives on a WA business's site, so "Perth" means Perth, Australia
+    search_query = _UNQUALIFIED_PERTH.sub(lambda m: f"{m.group(0)} Australia", search_query)
 
     return search_query
 
